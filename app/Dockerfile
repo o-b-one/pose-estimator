@@ -15,7 +15,5 @@ RUN npm run build
 FROM nginx:stable-alpine as deploy_image
 
 COPY --from=build_image /app/build /usr/share/nginx/html
-
-COPY nginx.conf /etc/nginx/conf.d/default.conf.template
-RUN envsubst '\$PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
+ENV NGINX_PORT $PORT
 
