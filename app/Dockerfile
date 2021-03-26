@@ -1,6 +1,8 @@
 FROM node:14 as build_image
 
 ARG PORT
+RUN echo $PORT
+
 
 WORKDIR /app
 
