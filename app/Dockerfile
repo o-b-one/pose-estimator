@@ -10,6 +10,7 @@ RUN npm ci
 COPY src/ src/
 COPY public/ public/
 COPY *.json ./
+ENV NODE_ENV=development
 RUN npm run build
 
 
