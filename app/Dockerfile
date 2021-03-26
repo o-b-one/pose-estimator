@@ -16,4 +16,5 @@ FROM nginx:stable-alpine as deploy_image
 
 COPY --from=build_image /app/build /usr/share/nginx/html
 ENV NGINX_PORT $PORT
+EXPOSE $NGINX_PORT
 
