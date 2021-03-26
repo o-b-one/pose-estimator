@@ -1,0 +1,33 @@
+.pose-visualizer-page{
+    .picture-button-container{
+      display: flex;
+      .pose-button{
+        max-width: 300px;
+      }
+    }
+    display: flex;
+    flex-direction: column;
+    .pose-display{
+      display: flex;
+      flex-direction: row;
+      .canvas-container{
+        position: relative;
+        .overlay-canvas{
+          position: absolute;
+          top:0;
+        }
+      }
+    }
+  }
+
+  .loader{
+    display: flex;
+    position: fixed;
+    width: 100vw;
+    height: 100vh;
+    justify-content: center;
+    align-items: center;
+    background: white;
+    opacity: .7;
+    z-index: 1000;
+  }

@@ -1,0 +1,8 @@
+.PoseInfo {}
+
+.value-data{
+    word-break: break-word;
+    box-sizing: content-box;
+    white-space: pre-wrap;
+    margin: 1rem;
+  }

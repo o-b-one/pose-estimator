@@ -1,0 +1,3 @@
+public/video
+node_modules
+*.mapping.ts
