@@ -1,8 +1,9 @@
-# pose estimator
+# BoostUp (Pose Estimator)
 
 ## Overview
 
-This project created in order to estimate what post a person found in and count the amount of repeats he is doing during exercise.
+This project created in order to estimate what pose a person found in, and to count the amount of repeats he is doing during exercise.
+
 
 ## Demo
 
