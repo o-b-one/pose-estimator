@@ -17,6 +17,7 @@
     "@types/react-dom": "^16.9.12",
     "axios": "^0.21.1",
     "color-convert": "^2.0.1",
+    "create-react-class": "^15.7.0",
     "jimp": "^0.12.1",
     "ml-knn": "^3.0.0",
     "node-sass": "^4.14.1",
