@@ -22,5 +22,5 @@ COPY --from=build_image /app/build /usr/share/nginx/html
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-RUN /bin/bash -c "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf"
+RUN "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf"
 
