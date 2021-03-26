@@ -1,9 +1,5 @@
 FROM node:14 as build_image
 
-ARG PORT
-RUN echo $PORT
-
-
 WORKDIR /app
 
 COPY package.json package.json
@@ -20,7 +16,6 @@ FROM nginx:stable-alpine as deploy_image
 
 COPY --from=build_image /app/build /usr/share/nginx/html
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-RUN "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf > /etc/nginx/conf.d/default.conf"
+COPY nginx.conf /etc/nginx/conf.d/default.conf.template
+CMD /bin/bash -c "envsubst '\$PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf" && nginx -g 'daemon off;'
 
