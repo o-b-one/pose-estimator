@@ -27,7 +27,7 @@ const INIT_STATE = {
   autoMinScore: false,
   loaded: false,
   videoCaptureTimeout: frameTimeMS,
-  minScoreToDraw: 0.7
+  minScoreToDraw: 0.75
 };
 
 export default class PoseEstimator extends React.Component<any, any> {
@@ -446,9 +446,16 @@ export default class PoseEstimator extends React.Component<any, any> {
           }
           // this.previewPoseVisualizer.drawByMemo(this.videoPlayer.current, 200, 200);
           this.loadImageToCanvas(this.videoPlayer.current, true)
-          await this.runPosenetOnCanvas();
           if (isVideoPlaying) {
-            this.interval = setTimeout(drawToCanvasLoop.bind(this), this.state.videoCaptureTimeout);
+            this.interval = setTimeout(async () => {
+              this.loadImageToCanvas(this.videoPlayer.current, true)
+              await this.runPosenetOnCanvas();
+              drawToCanvasLoop.call(this)
+            }, this.state.videoCaptureTimeout);
+          }else{
+            this.loadImageToCanvas(this.videoPlayer.current, true)
+            await this.runPosenetOnCanvas();
+
           }
         };
         this.videoPlayer.current.addEventListener('play', drawToCanvasLoop.bind(this));
