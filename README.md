@@ -4,7 +4,7 @@
 
 This project created in order to examin the TF abilities on the browser using web workers. 
 
-The algorithms used are CNN based on ResNet50 and PoseNet, and KNN.
+The algorithms being used are CNN based on ResNet50 and PoseNet, and KNN.
 
 The outcome is an application that is able to estimate what pose a person found at, and count the amount of repeats during live/recorded exercise.
 
