@@ -17,7 +17,18 @@ import { SpeechService } from '../../services/speech.service';
 import { IMAGE_MAPPING } from '../../constants/image.mapping';
 import { VIDEOS_MAPPING } from '../../constants/video.mapping';
 
-
+const INIT_STATE = {
+  videoSelected: false,
+  renderLines: true,
+  estimatedAction: null,
+  counters: {},
+  srcObject: null,
+  webcam: null,
+  autoMinScore: false,
+  loaded: false,
+  videoCaptureTimeout: frameTimeMS,
+  minScoreToDraw: 0.7
+};
 
 export default class PoseEstimator extends React.Component<any, any> {
   static readonly DIMENSIONS = {width: 224, height: 224}
@@ -50,18 +61,7 @@ export default class PoseEstimator extends React.Component<any, any> {
   
   constructor(props) {
     super(props);
-    this.state = {
-      videoSelected: false,
-      renderLines: false,
-      estimatedAction: null,
-      counters: {},
-      srcObject: null,
-      webcam: null,
-      autoMinScore: false,
-      loaded: false,
-      videoCaptureTimeout: frameTimeMS,
-      minScoreToDraw: 0.7
-    };
+    this.state = INIT_STATE;
     
     this.estimator.init({inputResolution: PoseEstimator.DIMENSIONS});
     
@@ -74,7 +74,7 @@ export default class PoseEstimator extends React.Component<any, any> {
   render() {
     return (
       <div className="pose-visualizer-page">
-      {!this.state.loaded && <section className='loader'>LOADING...</section>}
+      {!this.state.loaded && <section className='loader'>Loading Neural Network...</section>}
       <div className="picture-button-container">
       <Select
       value={''}
@@ -82,7 +82,8 @@ export default class PoseEstimator extends React.Component<any, any> {
       >
       {
         this.picturesToLoad.map(path => {
-          return <MenuItem value={`/img/poses${path}`}>{path.split('/').pop()}</MenuItem>
+          const name = path.split('/').pop()
+          return <MenuItem key={name} value={`/img/poses${path}`}>{name}</MenuItem>
         })
       }
       </Select>
@@ -151,7 +152,6 @@ export default class PoseEstimator extends React.Component<any, any> {
       title="Counters"
       value={[JSON.stringify(this.state.counters)]}
       />
-    }
     <FormControlLabel
     label="Auto min score"
     control={
@@ -267,8 +267,6 @@ export default class PoseEstimator extends React.Component<any, any> {
         })
         if(!this.autoCalc){
           const result = await this.estimator.classifyAction([...this.angle, this.pose.slope, this.pose.verticalPose, this.pose.ratioAvg]);
-          if(result.confidenceLevel < 0.6) return;
-          console.log("pose sent",result);
           this._actionEstimatorWorker.postMessage({result, type: 'calc'});
         }
         this.setProp('pose', this.pose);
@@ -281,7 +279,7 @@ export default class PoseEstimator extends React.Component<any, any> {
       this._actionEstimatorWorker.onerror = (e) => { debugger;console.error(e);};
       this._actionEstimatorWorker.onmessage = ({data}) =>{
         console.log("action set", data);
-        if(!data){
+        if(!data || data.score < .75){
           return;
         }
         console.log(data.action, data.score)

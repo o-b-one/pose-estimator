@@ -5,12 +5,13 @@ import './PoseInfo.css';
 const PoseInfo = (props) => (
   <div className="PoseInfo" data-testid="PoseInfo">
     <span>{props.title}:</span>
-    <span className="value-data">{props.value.map(val => <div>{val}</div> )}</span>
+    <div className="value-data">{props.value.map((val, key) => <span key={key}>{val}</span> )}</div>
   </div>
 );
 
 PoseInfo.propTypes = {
   title: PropTypes.string,
+  value: PropTypes.arrayOf(PropTypes.string),
 };
 
 PoseInfo.defaultProps = {

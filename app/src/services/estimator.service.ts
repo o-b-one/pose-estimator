@@ -15,6 +15,7 @@ export type PoseEstimatorPayload = {
 
 export class EstimatorService extends Singleton<PoseEstimatorPayload>{
     private readonly ROTATE_OPTIONS = [0, 90, 180, 270];
+    private readonly ACTIVATE_YOLO = false;
     
     private net;
     private actionClassifier: knn.KNNClassifier;
@@ -34,7 +35,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
         }
         
         this.loaded$ = new Promise( resolve => this.resolver = resolve);
-        const yolo$ = await yolo.v3tiny();
+        const yolo$ = this.ACTIVATE_YOLO ? await yolo.v3tiny() : Promise.resolve();
         const net$ = await posenet.load({
             architecture: 'ResNet50',
             outputStride: 16,
@@ -50,7 +51,6 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
             const action = conf.actions[actionString];
             action.dataset.forEach(ds => this.actionClassifier.addExample(tf.tensor1d(ds), actionString));
         })
-        
         await Promise.all([yolo$, net$])
         .then(([yolo, net]) => { 
             this.yolo = yolo;
@@ -68,16 +68,19 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
     async estimate(image, payload = {}) {
         const date = new Date();
         await this.loadedNotify();
-        // const result = await this.objectFinder(image);
-        // if (result.length > 0) {
-        //     const { left, top, width, height } = result[0];
-        //     const tfImage = tf.browser.fromPixels(image);
-        //     image = tf.tidy(() => {
-        
-        //         return this.preprocessImage(tfImage);
-        //     })
-        //     image = await tf.browser.toPixels(image);
-        // }
+        if(this.ACTIVATE_YOLO){
+            const result = await this.objectFinder(image);
+            if (result.length > 0) {
+                const { left, top, width, height } = result[0];
+                console.log({ left, top, width, height })
+                const tfImage = tf.browser.fromPixels(image);
+                image = tf.tidy(() => {
+            
+                    return this.preprocessImage(tfImage);
+                })
+                // image = await tf.browser.toPixels(tfImage);
+            }
+        }
         const [pose] = await Promise.all([this.poseEstimator(image, payload)]);
         if(pose){
             pose.estimationTime = date.getTime();
@@ -137,7 +140,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
                     result.slope = Math.min(...this.calcSlopes(result.keypoints));
                     result.verticalPose = this.isVertical(result.slope) ? 1000 : -1000;
                     return result;
-                });
+                }).catch(console.error);
             }
             
             calcSlopes(keypoints: any): any {

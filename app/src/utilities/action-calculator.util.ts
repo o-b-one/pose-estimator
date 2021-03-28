@@ -1,7 +1,7 @@
 import { IAppConfig } from "../interfaces/action-config.interface";
 import * as conf from "./actions"
 
-export const frameTimeMS: number = 150;
+export const frameTimeMS: number = 0;
 
 export const AppConfig: IAppConfig = {
     ...conf.default,

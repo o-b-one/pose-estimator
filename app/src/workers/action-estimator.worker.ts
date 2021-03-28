@@ -24,7 +24,7 @@ export function ActionEstimatorWorker(){
 			this._actions = configuration.actions;
 			for(let key in this._actions){
 				this._actions[key].singularPattern = [...this._actions[key].pattern];
-				for (let i = 0; i < this._actions[key].minRepeats; i++){
+				for (let i = 1; i < this._actions[key].minRepeats; i++){
 					this._actions[key].pattern.push.apply(this._actions[key].pattern, this._actions[key].singularPattern)
 				}
 			}
@@ -32,17 +32,18 @@ export function ActionEstimatorWorker(){
 		}
 		
 		estimateAction(actionString: string, confidenceLevel: number){
-			if(!actionString){
+			console.log("pose action to process",actionString, confidenceLevel);
+			if(!confidenceLevel || confidenceLevel < .75){
 				return;
 			}
 			let _lastGuess, improved = false;
-			if(this._previousActions[this._previousActions.length - 1] !== actionString){
+			if(actionString && this._previousActions[this._previousActions.length - 1] !== actionString){
 				this._previousActions.push(actionString);
 				let counter;
 				for (let key in this._actions){
 					let similar, counterTemp;
 					[similar, counterTemp] = this.getSimilarityScore(this._actions[key]);
-					improved = this.checkImprovement(similar, counter, key, this._actions[key]);
+					improved = this.handleImprovement(similar, counter, key, this._actions[key]);
 					if(improved){
 						counter = counterTemp;
 					}
@@ -55,17 +56,18 @@ export function ActionEstimatorWorker(){
 			console.log(
 				'improved: ', improved,
 				'prediction: ', actionString, 
-				'actions: ', this._previousActions.join())
+				'actions: ', this._previousActions.join()
+			);
 			return _lastGuess;
 		}
 		
 		private _shouldInit(): boolean {
 			return this._iterationSinceChanged > ActionEstimator.MAX_STATIC_ACTIONS || 
 				this._previousActions.length === this._memorySize || 
-				this._lastGuess.score === 1;
+				this._lastGuess.score >= .75;
 		}
 		
-		private checkImprovement(similarityScore: number, counter: number, actionString: string, action: IActionConfig): boolean{
+		private handleImprovement(similarityScore: number, counter: number, actionString: string, action: IActionConfig): boolean{
 			const score = similarityScore / action.pattern.length;
 			if(score > this._lastGuess.score){
 				this._lastGuess.score = score;
@@ -79,34 +81,34 @@ export function ActionEstimatorWorker(){
 			}
 		}
 		
-		private getSimilarityScore(action: IActionConfig, offset = 0): [number, number]{
+		private getSimilarityScore(action: IActionConfig, reverse = false): [number, number]{
 			let score = 0, counter = 0;
-			const pattern = action.pattern.slice(offset);
-			for (let index = 0 ; index < this._previousActions.length;  index++){
-				if(pattern.length > index && this._previousActions[index] !== pattern[index]){
-					break
+			const pattern = action.pattern;
+			let pActions =  this._previousActions.filter(paction => action.singularPattern.includes(paction))
+			pActions = reverse ? pActions.reverse() : pActions;
+			if(pActions.length > 0){
+				for (let index = 0 ; index < pActions.length;  index++){
+					if(pattern.length > index && pActions[index] !== pattern[index]){
+						break
+					}
+					score++;			
 				}
-				score++;			
-			}
-			if(++offset < action.pattern.length ){
-				let offsetScore, offsetCounter;
-				[offsetScore, offsetCounter] = this.getSimilarityScore(action, offset)
-				if(offsetScore > score){
-					score = offsetScore;
-					counter = offsetCounter;
+				const patternString = action.singularPattern.join('');
+				let actionsString = pActions.join('');
+				let index = actionsString.indexOf(patternString);
+				while(index !== -1 && index < actionsString.length){
+					counter++;
+					actionsString = actionsString.slice(index + patternString.length);
+					index = actionsString.indexOf(patternString);
 				}
-				else{
-					const patternString = action.singularPattern.join('');
-					let actionsString = this._previousActions.join('');
-					let index = actionsString.indexOf(patternString);
-					while(index !== -1 && index < actionsString.length){
-						counter++;
-						actionsString = actionsString.slice(index+patternString.length);
-						index = actionsString.indexOf(patternString);
+				if(!reverse){
+					const [rScore, rCounter] = this.getSimilarityScore(action, true);
+					if(rScore > score){
+						score = rScore;
+						counter = rCounter;
 					}
 				}
-			}			
-
+			}
 			return [score, counter];
 		}
 		
