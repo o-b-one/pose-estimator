@@ -7,6 +7,10 @@ COPY package.json package.json
 COPY package-lock.json package-lock.json
 RUN npm ci
 
+
+COPY config/ config/
+COPY scripts/ scripts/
+
 COPY src/ src/
 COPY public/ public/
 COPY *.json ./

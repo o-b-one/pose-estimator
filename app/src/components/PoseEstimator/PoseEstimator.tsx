@@ -8,11 +8,10 @@ import './pose-estimator.component.scss';
 
 import { Visualizer as PoseVisualizer } from '../../utilities/visualizer.util';
 import PoseInfo from '../PoseInfo/PoseInfo';
-import {WorkerInstaller} from '../../workers/worker-installer';
 import { EstimatorService } from '../../services/estimator.service';
 import { CalculatePosesWorker } from '../../workers/calculate-poses.worker';
-import { frameTimeMS, AppConfig } from '../../utilities/action-calculator.util';
 import { ActionEstimatorWorker } from '../../workers/action-estimator.worker';
+import { frameTimeMS, AppConfig } from '../../utilities/action-calculator.util';
 import { SpeechService } from '../../services/speech.service';
 import { IMAGE_MAPPING } from '../../constants/image.mapping';
 import { VIDEOS_MAPPING } from '../../constants/video.mapping';
@@ -257,55 +256,65 @@ export default class PoseEstimator extends React.Component<any, any> {
     
     setWorkers(cb = null){
       // [this._calculatorWorker, this._actionEstimatorWorker, this._estimatorWorker].forEach(worker => worker && worker.terminate());
-      this._calculatorWorker = WorkerInstaller(CalculatePosesWorker)
-      this._calculatorWorker.onmessage = async ({data}) =>{
-        this.pose = data;
-        this.angle = Object.values(this.pose.parts).map((part) => {
-          if ( Array.isArray(part['parts']) && Array.isArray(part['parts'][0].angle)){
-            return part['parts'][0].angle[0].value;
-          }
-        })
-        if(!this.autoCalc){
-          const result = await this.estimator.classifyAction([...this.angle, this.pose.slope, this.pose.verticalPose, this.pose.ratioAvg]);
-          this._actionEstimatorWorker.postMessage({result, type: 'calc'});
+      const [poseWorker, actionWorker] = this.estimator.registerWorkers(
+        {
+          worker: CalculatePosesWorker,
+          onmessage: this.processPoseEstimation.bind(this)
+        },
+        {
+          worker: ActionEstimatorWorker,
+          onmessage: this.processActionEstimation.bind(this)
         }
-        this.setProp('pose', this.pose);
-        this.drawPose();
-        cb && cb({pose: this.pose ,angle:this.angle});
-      };
-      
-      this._actionEstimatorWorker = WorkerInstaller(ActionEstimatorWorker)
+      );
+      this._calculatorWorker = poseWorker;
+      this._actionEstimatorWorker = actionWorker;
       this._actionEstimatorWorker.postMessage({type: 'init', config: AppConfig});
-      this._actionEstimatorWorker.onerror = (e) => { debugger;console.error(e);};
-      this._actionEstimatorWorker.onmessage = ({data}) =>{
-        console.log("action set", data);
-        if(!data || data.score < .75){
-          return;
-        }
-        console.log(data.action, data.score)
-        try{
-          if(data.action && data.score >= this.minScoreToDraw){
-            this._actionEstimatorWorker.postMessage({type: 'clear'})
-            this.setProp('estimatedAction', data);
-            let counter = this.state.counters[data.action] || 0 ;
-            counter += data.counter;
-            const counters =  {...this.state.counters};
-            counters[data.action] =  counter;
-            this.setProp('counters', counters);
-            SpeechService.talk(counter +" " + data.action);
-          }else{
-            if(data.score >= 0.5){
-              SpeechService.talk("Almost there, keep going")
-            }
-            this.setProp('estimatedAction', {action:"UNKNOWN"});
-            
-          }
-        }catch(e){
-          console.log(e);
-          debugger;
-        }
+      cb && cb({pose: this.pose ,angle:this.angle});
+    }
 
-      };
+    async processActionEstimation({data}){
+      console.log("action set", data);
+      if(!data || data.score < .75){
+        return;
+      }
+      console.log(data.action, data.score)
+      try{
+        if(data.action && data.score >= this.minScoreToDraw){
+          this._actionEstimatorWorker.postMessage({type: 'clear'})
+          this.setProp('estimatedAction', data);
+          let counter = this.state.counters[data.action] || 0 ;
+          counter += data.counter;
+          const counters =  {...this.state.counters};
+          counters[data.action] =  counter;
+          this.setProp('counters', counters);
+          SpeechService.talk(counter +" " + data.action);
+        }else{
+          if(data.score >= 0.5){
+            SpeechService.talk("Almost there, keep going")
+          }
+          this.setProp('estimatedAction', {action:"UNKNOWN"});
+          
+        }
+      }catch(e){
+        console.log(e);
+        debugger;
+      }
+
+    }
+
+    async processPoseEstimation({data}){
+      this.pose = data;
+      this.angle = Object.values(this.pose.parts).map((part) => {
+        if ( Array.isArray(part['parts']) && Array.isArray(part['parts'][0].angle)){
+          return part['parts'][0].angle[0].value;
+        }
+      })
+      if(!this.autoCalc){
+        const result = await this.estimator.classifyAction([...this.angle, this.pose.slope, this.pose.verticalPose, this.pose.ratioAvg]);
+        this._actionEstimatorWorker.postMessage({result, type: 'calc'});
+      }
+      this.setProp('pose', this.pose);
+      this.drawPose();
     }
     
     componentWillUnmount(){

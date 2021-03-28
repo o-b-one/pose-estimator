@@ -6,6 +6,7 @@ import * as tf from '@tensorflow/tfjs';
 import yolo from 'tfjs-yolo';
 import { Singleton } from '../classses/singleton.class';
 import { AppConfig } from '../utilities/action-calculator.util';
+import { WorkerInstaller } from '../workers/worker-installer';
 
 export type Dimensions = { width: number, height: number, rotate?: number }
 
@@ -65,6 +66,15 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
         return this.loaded$;
     }
     
+    registerWorkers(...workers:Array<{worker:Function, onmessage: any, onerror?: any}>){
+        return workers.map(w =>{
+            const worker = WorkerInstaller(w.worker);
+            worker.onmessage = w.onmessage;
+            worker.onerror = w.onerror ? w.onerror : (e) => {console.error(e); throw e};
+            return worker;
+        })
+    }
+
     async estimate(image, payload = {}) {
         const date = new Date();
         await this.loadedNotify();
