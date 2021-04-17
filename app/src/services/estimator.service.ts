@@ -7,6 +7,8 @@ import yolo from 'tfjs-yolo';
 import { Singleton } from '../classses/singleton.class';
 import { AppConfig } from '../utilities/action-calculator.util';
 import { WorkerInstaller } from '../workers/worker-installer';
+import { EBodyParts } from '../constants/body-parts.enum';
+import { IPoseEstimationResult } from '../interfaces/pose-estimation-result.interface';
 
 export type Dimensions = { width: number, height: number, rotate?: number }
 
@@ -15,7 +17,6 @@ export type PoseEstimatorPayload = {
 } & Partial<posenet.ModelConfig>;
 
 export class EstimatorService extends Singleton<PoseEstimatorPayload>{
-    private readonly ROTATE_OPTIONS = [0, 90, 180, 270];
     private readonly ACTIVATE_YOLO = false;
     
     private net;
@@ -23,6 +24,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
     private yolo;
     private loaded$: Promise<boolean>;
     private resolver: any;
+    private minScore: number = .75;
     
     set loaded(loaded: boolean) {
         this.resolver(loaded);
@@ -41,7 +43,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
             architecture: 'ResNet50',
             outputStride: 16,
             quantBytes: 4,
-            inputResolution: undefined,
+            inputResolution: {width: 224, height: 224},
             ...payload
         });
         // const actionClassifier$ = await tf.loadLayersModel('/model/actions_recognizer/model.json');
@@ -73,6 +75,13 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
             worker.onerror = w.onerror ? w.onerror : (e) => {console.error(e); throw e};
             return worker;
         })
+    }
+    
+    setMinScore(minScore: number):void {
+        this.minScore = minScore;
+    }
+    getMinScore():number {
+        return this.minScore;
     }
 
     async estimate(image, payload = {}) {
@@ -144,7 +153,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
                     flipHorizontal: false
                 }
                 ).then(result =>{
-                    if(result.score < 0.75){
+                    if(result.score < this.minScore){
                         return
                     }
                     result.slope = Math.min(...this.calcSlopes(result.keypoints));
@@ -153,7 +162,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
                 }).catch(console.error);
             }
             
-            calcSlopes(keypoints: any): any {
+            calcSlopes(keypoints: Array<IPoseEstimationResult>): [number, number] {
                 const parts = {};
                 for(const keypoint of keypoints){
                     const part = keypoint.part.toLowerCase().split(new RegExp('left|right')).pop()

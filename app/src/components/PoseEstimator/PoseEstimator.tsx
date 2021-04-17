@@ -45,7 +45,6 @@ export default class PoseEstimator extends React.Component<any, any> {
   public videoPlayer: React.RefObject<any>;
   
   public pose: any = null;
-  public minScoreToDraw: number = 0.6;
   public videoSrc: string = null;
   public estimator: EstimatorService = EstimatorService.Provider();
   private _currentImage: any;
@@ -60,9 +59,11 @@ export default class PoseEstimator extends React.Component<any, any> {
   
   constructor(props) {
     super(props);
-    this.state = INIT_STATE;
+
     
     this.estimator.init({inputResolution: PoseEstimator.DIMENSIONS});
+    INIT_STATE.minScoreToDraw = this.estimator.getMinScore();
+    this.state = INIT_STATE;
     
     this.previewCanvas = React.createRef();
     this.overlayCanvas = React.createRef();
@@ -181,7 +182,7 @@ export default class PoseEstimator extends React.Component<any, any> {
     
     </div>
     <div>
-    minScoreToDraw: {this.state.minScoreToDraw}
+    Min Score: {this.state.minScoreToDraw}
     <Slider
     onChange={(e, val) => this.setProp('minScoreToDraw', val)}
     value={this.state.minScoreToDraw}
@@ -191,7 +192,7 @@ export default class PoseEstimator extends React.Component<any, any> {
     />
     </div>
     <div>
-    videoCaptureTimeout: {this.state.videoCaptureTimeout}
+    Video capture interval: {this.state.videoCaptureTimeout}
     <Slider
     onChange={(e, val) => this.setProp('videoCaptureTimeout', val)}
     value={this.state.videoCaptureTimeout}
@@ -232,7 +233,6 @@ export default class PoseEstimator extends React.Component<any, any> {
       this.estimator.loadedNotify().then(() => this.setLoader(false));
       if(!this.autoCalc){
         this.setWorkers();
-        // this.loadWebcamVideoToCanvasAndRunPosenet();
       }
     }
     
@@ -240,13 +240,13 @@ export default class PoseEstimator extends React.Component<any, any> {
       this.setLoader(true);
       this.autoCalc = true;
       for (let pic of this.picturesToLoad){
-        this.promise = new Promise(res => this.setWorkers(res));
         await this.loadImageAndRunPosenet(`/img/poses${pic}`);
         let res = await this.promise;
         const category = pic.split('/')[1];
         this.calcRslt[category] = this.calcRslt[category] || [];
-        
-        this.calcRslt[category].push([...res.angle,res.pose.slope,res.pose.verticalPose, res.pose.ratioAvg]);
+        setTimeout(() => {
+          this.calcRslt[category].push([...this.angle,this.pose.slope,this.pose.verticalPose, res.pose.ratioAvg]);
+        });
       }
       
       console.log(this.calcRslt)
@@ -279,7 +279,7 @@ export default class PoseEstimator extends React.Component<any, any> {
       }
       console.log(data.action, data.score)
       try{
-        if(data.action && data.score >= this.minScoreToDraw){
+        if(data.action && data.score >= this.getProp('minScoreToDraw')){
           this._actionEstimatorWorker.postMessage({type: 'clear'})
           this.setProp('estimatedAction', data);
           let counter = this.state.counters[data.action] || 0 ;
@@ -361,10 +361,15 @@ export default class PoseEstimator extends React.Component<any, any> {
       async runPosenetOnCanvas(type?: string) {
         const pose = await this.estimator.estimate(this._currentImage);
         if(!pose) return;
-        this._calculatorWorker.postMessage({ value: pose, minScore: this.minScoreToDraw})  
+        this._calculatorWorker.postMessage({ value: pose, minScore: this.getProp('minScoreToDraw')})  
       }
       
-      
+      setMinScore(minScore: number): void{
+        this.estimator.setMinScore(minScore);
+        this.setProp('minScoreToDraw', minScore);
+      }
+
+
       drawPose() {
         this.overlayPoseVisualizer.loadPose({keypoints: this.pose.keypoints,score: this.pose.score });
         if (!this.getProp('renderLines')) {
@@ -372,12 +377,12 @@ export default class PoseEstimator extends React.Component<any, any> {
         }
         this.overlayPoseVisualizer.clearCanvas()
         if (this.getProp('autoMinScore')) {
-          this.minScoreToDraw = this.overlayPoseVisualizer.getSmartMinScore();
-          this.setProp('minScoreToDraw', this.minScoreToDraw);
+          const minScoreToDraw = this.overlayPoseVisualizer.getSmartMinScore();
+          this.setMinScore(minScoreToDraw); 
         }
-        this.overlayPoseVisualizer.drawOverlayOnCanvas({ "minScoreToDraw": this.minScoreToDraw, autoMinScore: this.getProp('autoMinScore'), transparency: null });
+        this.overlayPoseVisualizer.drawOverlayOnCanvas({ "minScoreToDraw": this.getProp('minScoreToDraw'), autoMinScore: this.getProp('autoMinScore'), transparency: null });
         if (this.showPoseOnlyPreview) {
-          this.overlayPoseVisualizer.drawOverlayOnCanvas({ transparency: 0.3, minScoreToDraw: this.minScoreToDraw, autoMinScore: this.getProp('autoMinScore') });
+          this.overlayPoseVisualizer.drawOverlayOnCanvas({ transparency: 0.3, minScoreToDraw: this.getProp('minScoreToDraw'), autoMinScore: this.getProp('autoMinScore') });
         }
       }
       
