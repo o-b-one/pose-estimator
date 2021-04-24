@@ -33,7 +33,7 @@ export function ActionEstimatorWorker(){
 		
 		estimateAction(actionString: string, confidenceLevel: number){
 			console.log("pose action to process",actionString, confidenceLevel);
-			if(!confidenceLevel || confidenceLevel < .75){
+			if(!confidenceLevel){
 				return;
 			}
 			let _lastGuess, improved = false;
@@ -125,9 +125,9 @@ export function ActionEstimatorWorker(){
 					break
 				case 'calc':
 					const result = this.estimateAction(data.result.action, data.result.confidenceLevel);
-					if(result && result.counter){
+					// if(result && result.counter){
 						postMessage(result, null)
-					}
+					// }
 					break
 				case 'init':
 					this.init(data.config);

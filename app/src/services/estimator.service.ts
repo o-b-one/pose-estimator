@@ -7,7 +7,6 @@ import yolo from 'tfjs-yolo';
 import { Singleton } from '../classses/singleton.class';
 import { AppConfig } from '../utilities/action-calculator.util';
 import { WorkerInstaller } from '../workers/worker-installer';
-import { EBodyParts } from '../constants/body-parts.enum';
 import { IPoseEstimationResult } from '../interfaces/pose-estimation-result.interface';
 
 export type Dimensions = { width: number, height: number, rotate?: number }

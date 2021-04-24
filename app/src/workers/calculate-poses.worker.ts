@@ -77,13 +77,13 @@ export function CalculatePosesWorker(){
 		
 		calcAngle(coordinate1, coordinate2, coordinate3) {
 			const 
-				line12 = this.getLine(coordinate1, coordinate2),
-				line13 = this.getLine(coordinate1, coordinate3),
-				line23 = this.getLine(coordinate2, coordinate3);
+				line1_2 = this.getLine(coordinate1, coordinate2),
+				line1_3 = this.getLine(coordinate1, coordinate3),
+				line2_3 = this.getLine(coordinate2, coordinate3);
 
 			const radians = Math.acos(
-				(Math.pow(line12,2) + Math.pow(line13, 2) - Math.pow(line23, 2)) 
-				/ (2 * line12 * line13)
+				(Math.pow(line1_2,2) + Math.pow(line1_3, 2) - Math.pow(line2_3, 2)) 
+				/ (2 * line1_2 * line1_3)
 			);
 			return (radians * 180) / Math.PI;
 		}
