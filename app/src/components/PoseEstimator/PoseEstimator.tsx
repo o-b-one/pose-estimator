@@ -8,13 +8,11 @@ import './pose-estimator.component.scss';
 
 import { Visualizer as PoseVisualizer } from '../../utilities/visualizer.util';
 import PoseInfo from '../PoseInfo/PoseInfo';
-import { EstimatorService } from '../../services/estimator.service';
-import { CalculatePosesWorker } from '../../workers/calculate-poses.worker';
-import { ActionEstimatorWorker } from '../../workers/action-estimator.worker';
-import { frameTimeMS, AppConfig } from '../../utilities/action-calculator.util';
+import { frameTimeMS } from '../../utilities/action-calculator.util';
 import { SpeechService } from '../../services/speech.service';
 import { IMAGE_MAPPING } from '../../constants/image.mapping';
 import { VIDEOS_MAPPING } from '../../constants/video.mapping';
+import { PoseEstimatorService } from '../../services/pose-estimator.service';
 
 const INIT_STATE = {
   videoSelected: false,
@@ -33,7 +31,7 @@ const INIT_STATE = {
 };
 
 export default class PoseEstimator extends React.Component<any, any> {
-  static readonly DIMENSIONS = {width: 224, height: 224}
+  static readonly DIMENSIONS = PoseEstimatorService.DIMENSIONS;
   public readonly picturesToLoad = IMAGE_MAPPING || [];
   public readonly videosToLoad = VIDEOS_MAPPING || [];
   
@@ -49,22 +47,16 @@ export default class PoseEstimator extends React.Component<any, any> {
   
   public pose: any = null;
   public videoSrc: string = null;
-  public estimator: EstimatorService = EstimatorService.Provider();
-  private _currentImage: any;
-  private _calculatorWorker: Worker;
-  private _actionEstimatorWorker: Worker;
+  public poseEstimatorService = PoseEstimatorService.Provider();
   distanceThreshold: { x: number; y: number; };
   interval: NodeJS.Timeout;
   calcRslt: any = {};
   angle: any[];
-  datasetPromise: {promise: Promise<{pose: any, angle: any}>, resolve: (data) => void};
   
   constructor(props) {
-    super(props);
+    super(props);   
     
-    
-    this.estimator.init({inputResolution: PoseEstimator.DIMENSIONS});
-    INIT_STATE.minScoreToDraw = this.estimator.getMinScore();
+    INIT_STATE.minScoreToDraw = this.poseEstimatorService.getMinScore();
     this.state = INIT_STATE;
     
     this.previewCanvas = React.createRef();
@@ -77,6 +69,7 @@ export default class PoseEstimator extends React.Component<any, any> {
   setProp(prop: keyof typeof INIT_STATE, value: any): void {
     this.setState({ ...this.state, ...{ [prop]: value } });
   }
+
   getProp(prop: keyof typeof INIT_STATE) {
     return this.state[prop];
   }
@@ -84,62 +77,19 @@ export default class PoseEstimator extends React.Component<any, any> {
   componentDidMount() {
     this.overlayPoseVisualizer = new PoseVisualizer({ canvas: this.overlayCanvas.current });
     this.previewPoseVisualizer = new PoseVisualizer({ canvas: this.previewCanvas.current });
-    
-    this.estimator.loadedNotify().then(() => this.setLoader(false));
-    if(!this.autoCalc){
-      this.setWorkers();
-    }
+    this.poseEstimatorService.init({
+      videoPlayer: this.videoPlayer,
+      previewPoseVisualizer: this.previewPoseVisualizer,
+    }); 
+    this.poseEstimatorService.loadedNotify().then(() => this.setLoader(false));
+    this.poseEstimatorService.onPoseEstimation(this.processPoseEstimation.bind(this));
+    this.poseEstimatorService.onActionEstimation(this.processActionEstimation.bind(this));
   }
-  
-  async buildDataset(){
-    this.setLoader(true);
-    this.autoCalc = true;
-    this.calcRslt = {};
-    for await( const pic of this.picturesToLoad) {
-      let resolve;
-      const category = pic.split('/')[1];
-      const promise = new Promise<any>( res => resolve = res);
-      this.datasetPromise = {resolve, promise};
-      this.loadImageAndRunPosenet(`/img/poses${pic}`);
-      console.log('wait for', pic);
-      const timeout = setTimeout(_ => this.datasetPromise.resolve(null), 3000)
-      let res = await this.datasetPromise.promise;
-      clearTimeout(timeout)
-      console.log('result for', pic);
-
-      if(!res){
-        continue;
-      }
-      this.calcRslt[category] = this.calcRslt[category] || [];
-      this.calcRslt[category].push([...this.angle,this.pose.slope,this.pose.verticalPose, res.pose.ratioAvg]);
-    };
     
-    console.log(this.calcRslt)
-    this.autoCalc = false;
-    this.setLoader(false);
-  }
-  
-  setWorkers(){
-    // [this._calculatorWorker, this._actionEstimatorWorker, this._estimatorWorker].forEach(worker => worker && worker.terminate());
-    const [poseWorker, actionWorker] = this.estimator.registerWorkers(
-      {
-        worker: CalculatePosesWorker,
-        onmessage: this.processPoseEstimation.bind(this)
-      },
-      {
-        worker: ActionEstimatorWorker,
-        onmessage: this.processActionEstimation.bind(this)
-      }
-      );
-      this._calculatorWorker = poseWorker;
-      this._actionEstimatorWorker = actionWorker;
-      this._actionEstimatorWorker.postMessage({type: 'init', config: AppConfig});
-    }
-    
-    async processActionEstimation({data}){
+    async processActionEstimation(data){
       console.log("action set", data);
       if(data?.action && data?.score >= this.getProp('minScoreToDraw')){
-        this._actionEstimatorWorker.postMessage({type: 'clear'})
+        this.poseEstimatorService.clearActionEstimationQueue();
         this.setProp('estimatedAction', data);
         let counter = this.state.counters[data.action] || 0 ;
         counter += data.counter;
@@ -153,36 +103,17 @@ export default class PoseEstimator extends React.Component<any, any> {
       }
     }
     
-    async processPoseEstimation({data}){
-      this.pose = data;
-      this.angle = Object.values(this.pose.parts).map((part) => {
-        if ( Array.isArray(part['parts']) && Array.isArray(part['parts'][0].angle)){
-          return part['parts'][0].angle[0].value;
-        }
-      });
-      this.datasetPromise?.resolve({pose: this.pose, angle: this.angle});
-      const result = await this.estimator.classifyAction([...this.angle, this.pose.slope, this.pose.verticalPose, this.pose.ratioAvg]);
-      this._actionEstimatorWorker.postMessage({result, type: 'calc'});
+    async processPoseEstimation(data){
+      this.pose = data.pose;
+      this.angle = data.angle;
       this.setProp('pose', this.pose);
       this.drawPose();
-    }
-    
-    componentWillUnmount(){
-      this._calculatorWorker.terminate();
     }
     
     private setLoader(loaderState: boolean){
       this.setProp('loaded', !loaderState);
     }
     
-    async loadImage(imagePath): Promise<any> {
-      const image = new Image();
-      image.src = `${imagePath}`;
-      return new Promise((resolve) => {
-        image.crossOrigin = '';
-        image.onload = () => resolve(image);
-      });
-    }
     
     onCanvasHover(hoverEvent) {
       this.distanceThreshold = {
@@ -208,125 +139,100 @@ export default class PoseEstimator extends React.Component<any, any> {
         }
       }
       
-      async runPosenetOnCanvas(type?: string) {
-        const pose = await this.estimator.estimate(this._currentImage);
-        if(!pose) return;
-        this._calculatorWorker.postMessage({ value: pose, minScore: this.getProp('minScoreToDraw')})  
+
+    setMinScore(minScore: number): void{
+      this.poseEstimatorService.setMinScore(minScore);
+      this.setProp('minScoreToDraw', minScore);
+    }
+      
+      
+    drawPose() {
+      this.overlayPoseVisualizer.loadPose({keypoints: this.pose.keypoints,score: this.pose.score });
+      if (!this.getProp('renderLines')) {
+        return;
       }
-      
-      setMinScore(minScore: number): void{
-        this.estimator.setMinScore(minScore);
-        this.setProp('minScoreToDraw', minScore);
+      this.overlayPoseVisualizer.clearCanvas()
+      if (this.getProp('autoMinScore')) {
+        const minScoreToDraw = this.overlayPoseVisualizer.getSmartMinScore();
+        this.setMinScore(minScoreToDraw); 
       }
+      this.overlayPoseVisualizer.drawOverlayOnCanvas({ "minScoreToDraw": this.getProp('minScoreToDraw'), autoMinScore: this.getProp('autoMinScore'), transparency: null });
+      if (this.showPoseOnlyPreview) {
+        this.overlayPoseVisualizer.drawOverlayOnCanvas({ transparency: 0.3, minScoreToDraw: this.getProp('minScoreToDraw'), autoMinScore: this.getProp('autoMinScore') });
+      }
+    }
       
+    cropImage(positions?: {top: number, left: number, width: number, height: number}) {
+      const { top, left, width, height } = positions || {};
+      this.previewPoseVisualizer.cropImage(left, top, width, height );
+    }
       
-      drawPose() {
-        this.overlayPoseVisualizer.loadPose({keypoints: this.pose.keypoints,score: this.pose.score });
-        if (!this.getProp('renderLines')) {
+    async loadImageAndRunPosenet(imagePath) {
+      this.videoPlayer.current.srcObject = null;
+      await this.poseEstimatorService.loadImageAndRunPosenet(imagePath);
+    }
+      
+    resizeCanvas({ width, height } = PoseEstimatorService.DIMENSIONS) {
+      const { previewCanvas, overlayCanvas, poseOnlyCanvas } = this;
+      if (!(previewCanvas.current && overlayCanvas.current && poseOnlyCanvas.current)) {
+        return
+      }
+      overlayCanvas.current.width = previewCanvas.current.width = width;
+      overlayCanvas.current.height = previewCanvas.current.height = height;
+      if (this.showPoseOnlyPreview) {
+        poseOnlyCanvas.current.width = width;
+        poseOnlyCanvas.current.height = height;
+      }
+    }
+
+    loadWebcamVideoToCanvasAndRunPosenet() {
+      navigator.mediaDevices.getUserMedia({ video: true })
+      .then((stream) => {
+        this.videoSrc = null;
+        this.setProp('videoSelected', true);
+        this.loadVideo(stream);
+      })
+      .catch(console.error);
+    }
+
+    async loadVideoToCanvasAndRunPosenet(videoPath) {
+      this.videoSrc = videoPath;
+      this.setProp('counters',{});
+      this.setProp('estimatedAction',null);
+      this.setProp('videoSelected', true);
+      this.loadVideo();
+    }
+     
+    async loadVideo(stream = null) {
+      this.videoPlayer.current.srcObject = stream;
+      this.videoPlayer.current.src = this.videoSrc;
+      
+      this.resizeCanvas();
+      
+      const drawToCanvasLoop = async () => {
+        const isVideoPlaying = (!this.videoPlayer.current.paused && !this.videoPlayer.current.ended);
+        if (!isVideoPlaying) {
           return;
         }
-        this.overlayPoseVisualizer.clearCanvas()
-        if (this.getProp('autoMinScore')) {
-          const minScoreToDraw = this.overlayPoseVisualizer.getSmartMinScore();
-          this.setMinScore(minScoreToDraw); 
+        if (this.previewCanvas.current.width === 0 || this.previewCanvas.current.height === 0) {
+          this.resizeCanvas({ width: this.videoPlayer.current.videoWidth, height: this.videoPlayer.current.videoHeight });
         }
-        this.overlayPoseVisualizer.drawOverlayOnCanvas({ "minScoreToDraw": this.getProp('minScoreToDraw'), autoMinScore: this.getProp('autoMinScore'), transparency: null });
-        if (this.showPoseOnlyPreview) {
-          this.overlayPoseVisualizer.drawOverlayOnCanvas({ transparency: 0.3, minScoreToDraw: this.getProp('minScoreToDraw'), autoMinScore: this.getProp('autoMinScore') });
-        }
-      }
-      
-      cropImage(positions?: {top: number, left: number, width: number, height: number}) {
-        const { top, left, width, height } = positions || {};
-        this.previewPoseVisualizer.cropImage(left, top, width, height );
-      }
-      
-      async loadImageToCanvas(imagePath: string, isVideo: boolean = false) {
-        let imageElement;
-        const positions = {left: 0,top:0,frameWidth:0, frameHeight:0, ...PoseEstimator.DIMENSIONS};
-        if(!isVideo){
-          this.videoPlayer.current.srcObject = null;
-          this.setState({ videoSelected: false });
-          imageElement = await this.loadImage(imagePath);
-          positions.frameWidth = imageElement.width;
-          positions.frameHeight = imageElement.height;
-        }
-        else{
-          imageElement = imagePath
-          positions.frameWidth = imageElement.videoWidth;
-          positions.frameHeight = imageElement.videoHeight;
+        // this.previewPoseVisualizer.drawByMemo(this.videoPlayer.current, 200, 200);
+        this.poseEstimatorService.loadImageToCanvas(this.videoPlayer.current, true)
+        if (isVideoPlaying) {
+          this.interval = setTimeout(async () => {
+            await this.poseEstimatorService.loadImageAndRunPosenet(this.videoPlayer.current, true);
+            drawToCanvasLoop.call(this)
+          }, this.state.videoCaptureTimeout);
+        }else{
+          await this.poseEstimatorService.loadImageAndRunPosenet(this.videoPlayer.current, true);
           
         }
-        this.previewPoseVisualizer.drawImage(positions, imageElement);
-        this.setCurrentImage(imageElement);
-        
-      }
-      
-      private setCurrentImage(imageElement) {
-        this._currentImage = imageElement;
-      }
-      async loadImageAndRunPosenet(imagePath) {
-        await this.loadImageToCanvas(imagePath);
-        await this.runPosenetOnCanvas();
-      }
-      resizeCanvas({ width, height } = PoseEstimator.DIMENSIONS) {
-        const { previewCanvas, overlayCanvas, poseOnlyCanvas } = this;
-        if (!(previewCanvas.current && overlayCanvas.current && poseOnlyCanvas.current)) {
-          return
-        }
-        overlayCanvas.current.width = previewCanvas.current.width = width;
-        overlayCanvas.current.height = previewCanvas.current.height = height;
-        if (this.showPoseOnlyPreview) {
-          poseOnlyCanvas.current.width = width;
-          poseOnlyCanvas.current.height = height;
-        }
-      }
-      loadWebcamVideoToCanvasAndRunPosenet() {
-        navigator.mediaDevices.getUserMedia({ video: true })
-        .then((stream) => {
-          this.videoSrc = null;
-          this.setProp('videoSelected', true);
-          this.loadVideo(stream);
-        })
-        .catch(console.error);
-      }
-      async loadVideoToCanvasAndRunPosenet(videoPath) {
-        this.videoSrc = videoPath;
-        this.setProp('counters',{});
-        this.setProp('estimatedAction',null);
-        this.setProp('videoSelected', true);
-        this.loadVideo();
-      }
-      async loadVideo(stream = null) {
-        this.videoPlayer.current.srcObject = stream;
-        this.videoPlayer.current.src = this.videoSrc;
-        let frames = [];
-        this.resizeCanvas();
-        const drawToCanvasLoop = async () => {
-          const isVideoPlaying = (!this.videoPlayer.current.paused && !this.videoPlayer.current.ended);
-          if (!isVideoPlaying) {
-            return;
-          }
-          if (this.previewCanvas.current.width === 0 || this.previewCanvas.current.height === 0) {
-            this.resizeCanvas({ width: this.videoPlayer.current.videoWidth, height: this.videoPlayer.current.videoHeight });
-          }
-          // this.previewPoseVisualizer.drawByMemo(this.videoPlayer.current, 200, 200);
-          this.loadImageToCanvas(this.videoPlayer.current, true)
-          if (isVideoPlaying) {
-            this.interval = setTimeout(async () => {
-              this.loadImageToCanvas(this.videoPlayer.current, true)
-              await this.runPosenetOnCanvas();
-              drawToCanvasLoop.call(this)
-            }, this.state.videoCaptureTimeout);
-          }else{
-            this.loadImageToCanvas(this.videoPlayer.current, true)
-            await this.runPosenetOnCanvas();
-            
-          }
-        };
-        this.videoPlayer.current.addEventListener('play', drawToCanvasLoop.bind(this));
-        this.videoPlayer.current.addEventListener('stop', () => clearTimeout(this.interval));
-      }
+      };
+
+      this.videoPlayer.current.addEventListener('play', drawToCanvasLoop.bind(this));
+      this.videoPlayer.current.addEventListener('stop', () => clearTimeout(this.interval));
+    }
       
       
       render() {
@@ -361,10 +267,10 @@ export default class PoseEstimator extends React.Component<any, any> {
           color="primary"
           onClick={this.loadWebcamVideoToCanvasAndRunPosenet.bind(this)}>
           Camera</Button>
-          <Button variant="contained"
+          {/* <Button variant="contained"
           color="secondary"
           onClick={this.buildDataset.bind(this)}
-          >Build dataset</Button>
+          >Build dataset</Button> */}
           </div>
           <div className="pose-display">
           
@@ -476,4 +382,4 @@ export default class PoseEstimator extends React.Component<any, any> {
             </div>
             )
           }
-        }
+    }

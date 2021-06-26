@@ -71,6 +71,7 @@ export class EstimatorService extends Singleton<PoseEstimatorPayload>{
         return workers.map(w =>{
             const worker = WorkerInstaller(w.worker);
             worker.onmessage = w.onmessage;
+            worker.onmessage = w.onmessage;
             worker.onerror = w.onerror ? w.onerror : (e) => {console.error(e); throw e};
             return worker;
         })
