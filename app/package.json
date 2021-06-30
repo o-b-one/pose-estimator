@@ -87,7 +87,8 @@
   "scripts": {
     "start": "node scripts/start.js",
     "build": "INLINE_RUNTIME_CHUNK=false node scripts/build.js",
-    "test": "node scripts/test.js"
+    "test": "node scripts/test.js",
+    "dataset": "ts-node utils/index.ts"
   },
   "license": "MIT",
   "eslintConfig": {
@@ -161,5 +162,8 @@
     "presets": [
       "react-app"
     ]
+  },
+  "devDependencies": {
+    "ts-node": "^10.0.0"
   }
 }

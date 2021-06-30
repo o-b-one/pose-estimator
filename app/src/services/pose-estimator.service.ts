@@ -22,6 +22,7 @@ export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
     private actionsCallbacks: Array<(data: any) => unknown> = [];
     private posesCallbacks: Array<(data: any) => unknown> = [];
     private ready: boolean = false;
+    posePromise: {resolve: (data: any) => void, promise: Promise<any> } = {} as any;
 
     constructor() {
         super();
@@ -39,6 +40,7 @@ export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
     public async loadImageAndRunPosenet(imagePath, isVideo: boolean) {
         await this.loadImageToCanvas(imagePath, isVideo);
         await this.runPosenetOnCanvas();
+        return this.posePromise.promise;
     }
 
     /**
@@ -71,6 +73,9 @@ export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
         if(!this.ready){
             return;
         }
+        let resolve;
+        this.posePromise.promise = new Promise(res => resolve = res);
+        this.posePromise.resolve = resolve;
         let imageElement;
         const positions = {left: 0,top:0,frameWidth:0, frameHeight:0, ...PoseEstimatorService.DIMENSIONS};
         if(!isVideo){
@@ -121,15 +126,17 @@ export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
             return arr;
         }, []) as any[];
         this.posesCallbacks.forEach(cb => cb({pose: msg.data, angle}));
-        const result = await this.estimator.classifyAction([...angle, msg.data.slope, msg.data.verticalPose, msg.data.ratioAvg]);
+        const poseData = [...angle, msg.data.slope, msg.data.verticalPose, msg.data.ratioAvg];
+        const result = await this.estimator.classifyAction(poseData);
         this.actionEstimatorWorker.postMessage({result, type: 'calc'});
+        this.posePromise.resolve(poseData);
     }
 
     private dispatchActionEstimation(msg: {data: any}): void{
         this.actionsCallbacks.forEach(cb => cb(msg.data));
     }
   
-    private async loadImage(imagePath): Promise<any> {
+    private loadImage(imagePath): Promise<any> {
         const image = new Image();
         image.src = `${imagePath}`;
         return new Promise((resolve) => {

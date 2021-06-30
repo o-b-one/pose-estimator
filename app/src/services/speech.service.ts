@@ -3,6 +3,7 @@ export class SpeechService{
     
     static language: string;
     static voice: SpeechSynthesisVoice;
+    static _lastText: string;
     
     static setLanguage(lang: string) {
         this.language = lang;
@@ -13,9 +14,10 @@ export class SpeechService{
     }
 
     static talk(txt: string){
-        if(this._synth.speaking){
+        if(this._synth.speaking || this._lastText === txt){
             return;
         }
+        this._lastText = txt;
         this._synth.cancel()
         const conf = new SpeechSynthesisUtterance(txt);
         conf.lang = this.language;

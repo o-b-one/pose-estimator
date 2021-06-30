@@ -1,5 +1,5 @@
 /* eslint-disable */
-import React, { useState } from 'react';
+import React from 'react';
 import Button from '@material-ui/core/Button';
 import Slider from '@material-ui/core/Slider';
 import Checkbox from '@material-ui/core/Checkbox';
@@ -7,6 +7,7 @@ import { FormControlLabel, Select, MenuItem } from '@material-ui/core';
 import './pose-estimator.component.scss';
 
 import { Visualizer as PoseVisualizer } from '../../utilities/visualizer.util';
+import { buildDataset } from '../../utilities/dataset.util';
 import PoseInfo from '../PoseInfo/PoseInfo';
 import { frameTimeMS } from '../../utilities/action-calculator.util';
 import { SpeechService } from '../../services/speech.service';
@@ -267,10 +268,10 @@ export default class PoseEstimator extends React.Component<any, any> {
           color="primary"
           onClick={this.loadWebcamVideoToCanvasAndRunPosenet.bind(this)}>
           Camera</Button>
-          {/* <Button variant="contained"
+          <Button variant="contained"
           color="secondary"
-          onClick={this.buildDataset.bind(this)}
-          >Build dataset</Button> */}
+          onClick={buildDataset}
+          >Build dataset</Button>
           </div>
           <div className="pose-display">
           

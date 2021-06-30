@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+
+
+  "compilerOptions": {
+    "target": "es2016",
+    "lib": [
+      "esnext"
+    ],
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "trainer",
+    "build"
+  ]
+}
