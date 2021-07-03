@@ -3,16 +3,18 @@ import { EstimatorService } from "../services/estimator.service";
 import { AppConfig } from "../utilities/action-calculator.util";
 import { ActionEstimatorWorker } from "../workers/action-estimator.worker";
 import { CalculatePosesWorker } from "../workers/calculate-poses.worker";
+import { Visualizer } from '../utilities/visualizer.util';
 
 
 
 interface PoseEstimatorPayload{
-    previewPoseVisualizer: any;
+    previewPoseVisualizer: Visualizer;
 };
 
 export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
     public static readonly DIMENSIONS = Object.freeze({width: 224, height: 224});
-    previewPoseVisualizer: any;
+    public static readonly TIMEOUT_MS = 0.3 * 1000;
+    previewPoseVisualizer: Visualizer;
     
     private estimator = EstimatorService.Provider({});
     private calculatorWorker: Worker;
@@ -74,7 +76,10 @@ export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
             return;
         }
         let resolve;
-        this.posePromise.promise = new Promise(res => resolve = res);
+        this.posePromise.promise = Promise.race( [
+            new Promise(res => resolve = res), 
+            new Promise(res => setTimeout(() => res(null), PoseEstimatorService.TIMEOUT_MS))
+        ]);
         this.posePromise.resolve = resolve;
         let imageElement;
         const positions = {left: 0,top:0,frameWidth:0, frameHeight:0, ...PoseEstimatorService.DIMENSIONS};
@@ -84,7 +89,7 @@ export class PoseEstimatorService extends Singleton<PoseEstimatorPayload>{
           positions.frameHeight = imageElement.height;
         }
         else{
-          imageElement = imagePath
+          imageElement = await Promise.resolve(imagePath)
           positions.frameWidth = imageElement.videoWidth;
           positions.frameHeight = imageElement.videoHeight;
           

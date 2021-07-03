@@ -4,7 +4,6 @@ const actions = {
             "pattern": [
                 "stand",
                 "squat",
-                "stand",
             ],
             "enum": 0,
             "minRepeats": 1,

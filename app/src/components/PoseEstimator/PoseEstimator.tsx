@@ -49,6 +49,7 @@ export default class PoseEstimator extends React.Component<any, any> {
   public pose: any = null;
   public videoSrc: string = null;
   public poseEstimatorService = PoseEstimatorService.Provider();
+  currentImage: string;
   distanceThreshold: { x: number; y: number; };
   interval: NodeJS.Timeout;
   calcRslt: any = {};
@@ -170,7 +171,8 @@ export default class PoseEstimator extends React.Component<any, any> {
       
     async loadImageAndRunPosenet(imagePath) {
       this.videoPlayer.current.srcObject = null;
-      await this.poseEstimatorService.loadImageAndRunPosenet(imagePath);
+      this.currentImage = imagePath;
+      await this.poseEstimatorService.loadImageAndRunPosenet(imagePath, false);
     }
       
     resizeCanvas({ width, height } = PoseEstimatorService.DIMENSIONS) {
@@ -198,16 +200,18 @@ export default class PoseEstimator extends React.Component<any, any> {
 
     async loadVideoToCanvasAndRunPosenet(videoPath) {
       this.videoSrc = videoPath;
-      this.setProp('counters',{});
-      this.setProp('estimatedAction',null);
-      this.setProp('videoSelected', true);
       this.loadVideo();
     }
      
     async loadVideo(stream = null) {
       this.videoPlayer.current.srcObject = stream;
       this.videoPlayer.current.src = this.videoSrc;
-      
+      this.currentImage = null;
+      this.setProp('counters',{});
+      this.setProp('estimatedAction',null);
+      this.setProp('videoSelected', true);
+
+    
       this.resizeCanvas();
       
       const drawToCanvasLoop = async () => {
@@ -242,7 +246,7 @@ export default class PoseEstimator extends React.Component<any, any> {
           {!this.state.loaded && <section className='loader'>Loading Neural Network...</section>}
           <div className="picture-button-container">
           <Select
-          value={''}
+          value={this.currentImage}
           onChange={(ev) => this.loadImageAndRunPosenet(ev.target.value)}
           >
           {

@@ -208,7 +208,7 @@ export class Visualizer {
 
   drawByMemo(image?, originalWidth = 200, originalHeight = 200){
     let {left, top, width, height, frameWidth, frameHeight} = this.latestPosition;
-    if(image)
+    if(!!image)
       this.image = image
     this.clearCanvas()
     this.ctx.drawImage(this.image,left, top, frameWidth, frameHeight,left, top, width || originalWidth, height || originalHeight);
